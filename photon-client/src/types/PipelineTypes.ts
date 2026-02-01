@@ -67,7 +67,6 @@ export interface PipelineSettings {
   ledMode: boolean;
   hueInverted: boolean;
   outputShowMultipleTargets: boolean;
-  outputMaximumTargets: number;
   contourSortMode: number;
   cameraExposureRaw: number;
   cameraMinExposureRaw: number;
@@ -138,7 +137,6 @@ export const DefaultPipelineSettings: Omit<
   offsetDualPointB: { x: 0, y: 0 },
   hsvHue: { first: 50, second: 180 },
   hueInverted: false,
-  outputMaximumTargets: 10,
   contourSortMode: 0,
   offsetSinglePoint: { x: 0, y: 0 },
   cameraBrightness: 50,
