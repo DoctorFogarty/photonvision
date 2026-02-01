@@ -33,6 +33,7 @@ import org.opencv.core.Rect2d;
 import org.photonvision.common.configuration.ConfigManager;
 import org.photonvision.common.configuration.NeuralNetworkModelManager;
 import org.photonvision.common.hardware.Platform;
+import org.photonvision.common.dataflow.structures.Packet;
 import org.photonvision.common.logging.LogGroup;
 import org.photonvision.common.logging.Logger;
 import org.photonvision.common.util.math.MathUtils;
@@ -319,6 +320,12 @@ public class AprilTagPipeline extends CVPipeline<CVPipelineResult, AprilTagPipel
 
                 targetList.add(target);
             }
+        }
+
+        if (targetList.size() > Packet.MAX_ARRAY_LEN) {
+            logger.error(
+                    "We have " + targetList.size() + " targets! Arbitrarily dropping some on the floor");
+            targetList = targetList.subList(0, Packet.MAX_ARRAY_LEN);
         }
 
         var fpsResult = calculateFPSPipe.run(null);
