@@ -35,6 +35,26 @@ public class AprilTagPipelineSettings extends AdvancedPipelineSettings {
     public boolean doMultiTarget = false;
     public boolean doSingleTargetAlways = false;
 
+    // ML-assisted detection settings
+    public boolean useMLDetection = false;
+    public double mlConfidenceThreshold = 0.5;
+    public double mlNmsThreshold = 0.45;
+    public double mlRoiExpansionFactor = 1.2;
+    public boolean mlFallbackToTraditional = true;
+    public String mlModelName = null;
+
+    // Adaptive Tag Resizing (ATR) settings
+    /** Enable adaptive tag resizing for ML-assisted detection */
+    public boolean atrEnabled = true;
+    /** Target dimension (pixels) for ATR resizing. Tags larger than this will be downscaled. */
+    public int atrTargetDimension = 160;
+    /** Minimum scale factor - prevents extreme downscaling. Default: 0.25 (4x max downscale) */
+    public double atrMinScaleFactor = 0.25;
+    /** Enable two-stage coarse-to-fine corner refinement (more accurate but slower) */
+    public boolean atrCornerRefinementEnabled = false;
+    /** Window size for cornerSubPix refinement (pixels around each corner) */
+    public int atrRefinementWindowSize = 5;
+
     // 3d settings
 
     public AprilTagPipelineSettings() {
@@ -63,6 +83,23 @@ public class AprilTagPipelineSettings extends AdvancedPipelineSettings {
         result = prime * result + decisionMargin;
         result = prime * result + (doMultiTarget ? 1231 : 1237);
         result = prime * result + (doSingleTargetAlways ? 1231 : 1237);
+        // ML-assisted detection fields
+        result = prime * result + (useMLDetection ? 1231 : 1237);
+        temp = Double.doubleToLongBits(mlConfidenceThreshold);
+        result = prime * result + (int) (temp ^ (temp >>> 32));
+        temp = Double.doubleToLongBits(mlNmsThreshold);
+        result = prime * result + (int) (temp ^ (temp >>> 32));
+        temp = Double.doubleToLongBits(mlRoiExpansionFactor);
+        result = prime * result + (int) (temp ^ (temp >>> 32));
+        result = prime * result + (mlFallbackToTraditional ? 1231 : 1237);
+        result = prime * result + ((mlModelName == null) ? 0 : mlModelName.hashCode());
+        // ATR fields
+        result = prime * result + (atrEnabled ? 1231 : 1237);
+        result = prime * result + atrTargetDimension;
+        temp = Double.doubleToLongBits(atrMinScaleFactor);
+        result = prime * result + (int) (temp ^ (temp >>> 32));
+        result = prime * result + (atrCornerRefinementEnabled ? 1231 : 1237);
+        result = prime * result + atrRefinementWindowSize;
         return result;
     }
 
@@ -83,6 +120,25 @@ public class AprilTagPipelineSettings extends AdvancedPipelineSettings {
         if (decisionMargin != other.decisionMargin) return false;
         if (doMultiTarget != other.doMultiTarget) return false;
         if (doSingleTargetAlways != other.doSingleTargetAlways) return false;
+        // ML-assisted detection fields
+        if (useMLDetection != other.useMLDetection) return false;
+        if (Double.doubleToLongBits(mlConfidenceThreshold)
+                != Double.doubleToLongBits(other.mlConfidenceThreshold)) return false;
+        if (Double.doubleToLongBits(mlNmsThreshold) != Double.doubleToLongBits(other.mlNmsThreshold))
+            return false;
+        if (Double.doubleToLongBits(mlRoiExpansionFactor)
+                != Double.doubleToLongBits(other.mlRoiExpansionFactor)) return false;
+        if (mlFallbackToTraditional != other.mlFallbackToTraditional) return false;
+        if (mlModelName == null) {
+            if (other.mlModelName != null) return false;
+        } else if (!mlModelName.equals(other.mlModelName)) return false;
+        // ATR fields
+        if (atrEnabled != other.atrEnabled) return false;
+        if (atrTargetDimension != other.atrTargetDimension) return false;
+        if (Double.doubleToLongBits(atrMinScaleFactor)
+                != Double.doubleToLongBits(other.atrMinScaleFactor)) return false;
+        if (atrCornerRefinementEnabled != other.atrCornerRefinementEnabled) return false;
+        if (atrRefinementWindowSize != other.atrRefinementWindowSize) return false;
         return true;
     }
 }
