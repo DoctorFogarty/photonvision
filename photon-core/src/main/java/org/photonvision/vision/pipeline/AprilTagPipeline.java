@@ -17,18 +17,23 @@
 
 package org.photonvision.vision.pipeline;
 
+import edu.wpi.first.apriltag.AprilTag;
 import edu.wpi.first.apriltag.AprilTagDetection;
 import edu.wpi.first.apriltag.AprilTagDetector;
+import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.apriltag.AprilTagPoseEstimate;
 import edu.wpi.first.apriltag.AprilTagPoseEstimator.Config;
 import edu.wpi.first.math.geometry.CoordinateSystem;
 import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
+import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.util.Units;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
+import org.opencv.core.Rect;
 import org.opencv.core.Rect2d;
 import org.photonvision.common.configuration.ConfigManager;
 import org.photonvision.common.configuration.NeuralNetworkModelManager;
@@ -43,6 +48,7 @@ import org.photonvision.vision.apriltag.AprilTagFamily;
 import org.photonvision.vision.frame.Frame;
 import org.photonvision.vision.frame.FrameThresholdType;
 import org.photonvision.vision.objects.Model;
+import org.photonvision.vision.opencv.CVMat;
 import org.photonvision.vision.pipe.CVPipe.CVPipeResult;
 import org.photonvision.vision.pipe.impl.AprilTagDetectionPipe;
 import org.photonvision.vision.pipe.impl.AprilTagDetectionPipe.AprilTagDetectionPipeParams;
@@ -71,6 +77,7 @@ public class AprilTagPipeline extends CVPipeline<CVPipelineResult, AprilTagPipel
     private final AprilTagROIDecodePipe mlDecodePipe = new AprilTagROIDecodePipe();
     private boolean mlAvailable = false;
     private boolean mlWasAvailable = false; 
+    private boolean mlUseFAST = true; //TODO this should be a setting
 
     private static final FrameThresholdType PROCESSING_TYPE = FrameThresholdType.GREYSCALE;
 
@@ -204,12 +211,56 @@ public class AprilTagPipeline extends CVPipeline<CVPipelineResult, AprilTagPipel
         // Perform AprilTag detection (traditional or ML-assisted)
         List<AprilTagDetection> detections;
         long detectionNanos;
+        
+        List<AprilTagDetection> usedDetections = new ArrayList<>();
+        List<TrackedTarget> targetList = new ArrayList<>();
 
         if (settings.useMLDetection && mlAvailable) {
             // Use ML-assisted hybrid detection
             var mlDetectionResult = processMLHybrid(frame);
             detections = mlDetectionResult.detections;
             detectionNanos = mlDetectionResult.nanosElapsed;
+
+            // If only one tag detected, use Field Aware Search for Tags (FAST) to determine if we should see more
+            // TODO: is size == 1 the right condition here? The tags should be deduplicated already and it's probably not worth doing FAST if multiple tags are already seen
+            if (mlUseFAST && detections.size() == 1 && settings.solvePNPEnabled) {
+                // Do single target pose esimation for the one detected tag
+                AprilTagPoseEstimate tagPoseEstimate = null;
+                AprilTagDetection detection = detections.get(0);
+                var poseResult = singleTagPoseEstimatorPipe.run(detection);
+                sumPipeNanosElapsed += poseResult.nanosElapsed;
+                tagPoseEstimate = poseResult.output;
+
+                TrackedTarget target =
+                        new TrackedTarget(
+                                detection,
+                                tagPoseEstimate,
+                                new TargetCalculationParameters(
+                                        false, null, null, null, null, frameStaticProperties));
+
+                var correctedBestPose =
+                        MathUtils.convertOpenCVtoPhotonTransform(target.getBestCameraToTarget3d());
+                var correctedAltPose =
+                        MathUtils.convertOpenCVtoPhotonTransform(target.getAltCameraToTarget3d());
+
+                target.setBestCameraToTarget3d(
+                        new Transform3d(correctedBestPose.getTranslation(), correctedBestPose.getRotation()));
+                target.setAltCameraToTarget3d(
+                        new Transform3d(correctedAltPose.getTranslation(), correctedAltPose.getRotation()));
+
+                // Determine if we should see more tags based on the one we detected
+                Rect fastBoundingBox = getFASTBoundingBox(target, frame);
+
+                // If FAST found a valid bounding box, run traditional detection in that area
+                if (fastBoundingBox != null) {
+                    CVMat imageFAST = new CVMat(frame.processedImage.getMat().submat(fastBoundingBox)); //TODO should not create a new CVMat here
+                    CVPipeResult<List<AprilTagDetection>> fastDetectionResult =
+                            aprilTagDetectionPipe.run(imageFAST);
+                    // TODO transform detections back into original frame coordinates
+                    detections.addAll(fastDetectionResult.output);
+                    detectionNanos += fastDetectionResult.nanosElapsed;
+                }
+            }
 
             // Fallback to traditional detection if ML found nothing
             if (detections.isEmpty() && settings.mlFallbackToTraditional) {
@@ -227,29 +278,9 @@ public class AprilTagPipeline extends CVPipeline<CVPipelineResult, AprilTagPipel
         }
         sumPipeNanosElapsed += detectionNanos;
 
-        List<AprilTagDetection> usedDetections = new ArrayList<>();
-        List<TrackedTarget> targetList = new ArrayList<>();
 
         // Filter out detections based on pipeline settings
-        for (AprilTagDetection detection : detections) {
-            // TODO this should be in a pipe, not in the top level here (Matt)
-            if (detection.getDecisionMargin() < settings.decisionMargin) continue;
-            if (detection.getHamming() > settings.hammingDist) continue;
-
-            usedDetections.add(detection);
-
-            // Populate target list for multitag
-            // (TODO: Address circular dependencies. Multitag only requires corners and IDs, this should
-            // not be necessary.)
-            TrackedTarget target =
-                    new TrackedTarget(
-                            detection,
-                            null,
-                            new TargetCalculationParameters(
-                                    false, null, null, null, null, frameStaticProperties));
-
-            targetList.add(target);
-        }
+        filterDetectionsFromSettings(settings, detections, usedDetections, targetList);
 
         // Do multi-tag pose estimation
         Optional<MultiTargetPNPResult> multiTagResult = Optional.empty();
@@ -332,6 +363,100 @@ public class AprilTagPipeline extends CVPipeline<CVPipelineResult, AprilTagPipel
         return new CVPipelineResult(
                 frame.sequenceID, sumPipeNanosElapsed, fps, targetList, multiTagResult, frame);
     }
+
+    private Rect getFASTBoundingBox(TrackedTarget target, Frame frame) {
+        AprilTagFieldLayout atfl = ConfigManager.getInstance().getConfig().getApriltagFieldLayout();
+        List<AprilTag> fieldTags = atfl.getTags();
+        Pose3d tagPose = atfl.getTagPose(target.getFiducialId()).orElse(null);
+        Pose3d cameraPose = tagPose.plus(target.getBestCameraToTarget3d().inverse()); //TODO these probably need coordinate transforms
+        int frameWidth = frameStaticProperties.imageWidth;
+        int frameHeight = frameStaticProperties.imageHeight;
+        for (AprilTag tag : fieldTags) {
+            if (tag.ID == target.getFiducialId()) {
+                continue; // Skip the tag we already have
+            }
+            double horizontalFOV = 90.0; // TODO get from camera calibration
+            double verticalFOV = 60.0; // TODO get from camera calibration
+            if (isTagVisibleFromCamera(tag, cameraPose, horizontalFOV, verticalFOV)) {
+                // Project the tag corners into image space to get a bounding box
+                // TODO implement this properly
+                double tagSize = 0.2667; // 10.5 inches in meters, this is the size of the whole plate. TODO use actual size needed from detection and scale appropriately
+                double minX = Double.MAX_VALUE;
+                double minY = Double.MAX_VALUE;
+                double maxX = Double.MIN_VALUE;
+                double maxY = Double.MIN_VALUE;
+                for (int i = 0; i < 4; i++) {
+                    double xOffset = (i == 0 || i == 3) ? -tagSize / 2 : tagSize / 2;
+                    double yOffset = (i == 0 || i == 1) ? -tagSize / 2 : tagSize / 2;
+                    Translation3d cornerInField = tag.pose.getTranslation().plus(new Translation3d(xOffset, yOffset, 0));
+                    // Transform corner to camera coordinates
+                    Translation3d cornerInCamera = cornerInField.plus(new Transform3d(cameraPose.getTranslation(), cameraPose.getRotation()).inverse().getTranslation());
+                    // Project to image plane
+                    // TODO use actual camera intrinsics
+                    // TODO coordinate transforms between Photon and WPILib likely needed here
+                    double fx = 600; // focal length in pixels
+                    double fy = 600; // focal length in pixels
+                    double cx = frameWidth / 2.0;
+                    double cy = frameHeight / 2.0;
+                    double u = fx * (cornerInCamera.getY() / cornerInCamera.getX()) + cx;
+                    double v = fy * (cornerInCamera.getZ() / cornerInCamera.getX()) + cy;
+                    minX = Math.min(minX, u);
+                    minY = Math.min(minY, v);
+                    maxX = Math.max(maxX, u);
+                    maxY = Math.max(maxY, v);
+                }
+
+                int newX = (int) Math.floor(Math.max(0, minX));
+                int newY = (int) Math.floor(Math.max(0, minY));
+                int newWidth = (int) Math.ceil(Math.min(frameWidth - newX, maxX - minX));
+                int newHeight = (int) Math.ceil(Math.min(frameHeight - newY, maxY - minY));
+                return new Rect(newX, newY, newWidth, newHeight);
+            }
+        }
+
+        return new Rect();
+    }
+
+    private boolean isTagVisibleFromCamera(AprilTag tag, Pose3d cameraPose, double horizontalFOV, double verticalFOV) {
+        Translation3d targetInCameraCoordinates = tag.pose.getTranslation()
+            .plus(new Transform3d(cameraPose.getTranslation(), cameraPose.getRotation())
+                .inverse().getTranslation());
+        // TODO check that this is the right axis
+        if (targetInCameraCoordinates.getX() < 0) {
+            return false; // Tag is behind the camera
+        }
+        double angleToTagHorizontal = Math.toDegrees(Math.atan2(targetInCameraCoordinates.getY(), targetInCameraCoordinates.getX()));
+        double angleToTagVertical = Math.toDegrees(Math.atan2(targetInCameraCoordinates.getZ(), targetInCameraCoordinates.getX()));
+        if (Math.abs(angleToTagHorizontal) <= horizontalFOV / 2 && Math.abs(angleToTagVertical) <= verticalFOV / 2) {
+            return true; // Tag is within FOV
+        }
+        return false;
+    }
+
+    private void filterDetectionsFromSettings(AprilTagPipelineSettings settings, List<AprilTagDetection> detections,
+            List<AprilTagDetection> usedDetections, List<TrackedTarget> targetList) {
+        for (AprilTagDetection detection : detections) {
+            // TODO this should be in a pipe, not in the top level here (Matt)
+            if (detection.getDecisionMargin() < settings.decisionMargin) continue;
+            if (detection.getHamming() > settings.hammingDist) continue;
+
+            usedDetections.add(detection);
+
+            // Populate target list for multitag
+            // (TODO: Address circular dependencies. Multitag only requires corners and IDs, this should
+            // not be necessary.)
+            TrackedTarget target =
+                    new TrackedTarget(
+                            detection,
+                            null,
+                            new TargetCalculationParameters(
+                                    false, null, null, null, null, frameStaticProperties));
+
+            targetList.add(target);
+        }
+    }
+
+
 
     /** Result container for ML hybrid detection */
     private static class MLDetectionResult {
