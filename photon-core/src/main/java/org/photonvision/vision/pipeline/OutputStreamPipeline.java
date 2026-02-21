@@ -41,6 +41,7 @@ public class OutputStreamPipeline {
 
     private final Draw2dArucoPipe draw2dArucoPipe = new Draw2dArucoPipe();
     private final Draw3dArucoPipe draw3dArucoPipe = new Draw3dArucoPipe();
+    private final DrawMLROIPipe drawMLROIPipe = new DrawMLROIPipe();
     private final CalculateFPSPipe calculateFPSPipe = new CalculateFPSPipe();
     private final ResizeImagePipe resizeImagePipe = new ResizeImagePipe();
 
@@ -58,19 +59,19 @@ public class OutputStreamPipeline {
         draw2dTargetsPipe.setParams(
                 new Draw2dTargetsPipe.Draw2dTargetsParams(
                         settings.outputShouldDraw,
-                        settings.outputShowMultipleTargets,
+                        settings.outputMaximumTargets,
                         settings.streamingFrameDivisor));
 
         draw2dAprilTagsPipe.setParams(
                 new Draw2dAprilTagsPipe.Draw2dAprilTagsParams(
                         settings.outputShouldDraw,
-                        settings.outputShowMultipleTargets,
+                        settings.outputMaximumTargets,
                         settings.streamingFrameDivisor));
 
         draw2dArucoPipe.setParams(
                 new Draw2dArucoPipe.Draw2dArucoParams(
                         settings.outputShouldDraw,
-                        settings.outputShowMultipleTargets,
+                        settings.outputMaximumTargets,
                         settings.streamingFrameDivisor));
 
         draw2dCrosshairPipe.setParams(
@@ -111,6 +112,14 @@ public class OutputStreamPipeline {
             drawCalibrationPipe.setParams(
                     new DrawCalibrationPipe.DrawCalibrationPipeParams(
                             pipelineSettings.streamingFrameDivisor, pipelineSettings.drawAllSnapshots));
+        }
+
+        if (settings instanceof AprilTagPipelineSettings atSettings) {
+            drawMLROIPipe.setParams(
+                    new DrawMLROIPipe.DrawMLROIParams(
+                            settings.outputShouldDraw,
+                            atSettings.showDetectionBoxes,
+                            settings.streamingFrameDivisor));
         }
     }
 
@@ -181,6 +190,9 @@ public class OutputStreamPipeline {
 
                 pipeProfileNanos[8] = 0;
             } else if (settings instanceof AprilTagPipelineSettings) {
+                // Draw ML detection ROI boxes (underneath tag overlays)
+                drawMLROIPipe.run(Pair.of(outMat, inputAndOutputFrame.mlDetectionRois));
+
                 // If we are doing apriltags...
                 if (settings.solvePNPEnabled) {
                     // Draw 3d Apriltag markers (camera is calibrated and running in 3d mode)
