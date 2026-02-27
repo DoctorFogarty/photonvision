@@ -58,4 +58,6 @@ public enum CameraQuirk {
     ArduOV9782,
     /** Camera has odd exposure range, and supports gain control */
     See3Cam_24CUG,
+    /** 'New Cam' */
+    NewCam
 }
