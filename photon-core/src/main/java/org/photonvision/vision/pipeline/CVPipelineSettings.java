@@ -46,6 +46,8 @@ public class CVPipelineSettings implements Cloneable {
     public double cameraMinExposureRaw = 1;
     public double cameraMaxExposureRaw = 100;
     public int cameraBrightness = 50;
+    public int cameraGamma = 150;
+    public int cameraContrast = 32;
     // Currently only used by a few cameras (notably the zero-copy Pi Camera driver) with the Gain
     // quirk
     public int cameraGain = 75;
@@ -73,6 +75,8 @@ public class CVPipelineSettings implements Cloneable {
                 && Double.compare(that.cameraMinExposureRaw, cameraMinExposureRaw) == 0
                 && Double.compare(that.cameraMaxExposureRaw, cameraMaxExposureRaw) == 0
                 && Double.compare(that.cameraBrightness, cameraBrightness) == 0
+                && cameraGamma == that.cameraGamma
+                && cameraContrast == that.cameraContrast
                 && Double.compare(that.cameraGain, cameraGain) == 0
                 && Double.compare(that.cameraRedGain, cameraRedGain) == 0
                 && Double.compare(that.cameraBlueGain, cameraBlueGain) == 0
@@ -98,6 +102,8 @@ public class CVPipelineSettings implements Cloneable {
                 cameraMinExposureRaw,
                 cameraMaxExposureRaw,
                 cameraBrightness,
+                cameraGamma,
+                cameraContrast,
                 cameraGain,
                 cameraRedGain,
                 cameraBlueGain,

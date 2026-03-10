@@ -265,6 +265,16 @@ public class GenericUSBCameraSettables extends VisionSourceSettables {
     }
 
     @Override
+    public void setGamma(int gamma) {
+        softSet("gamma", gamma);
+    }
+
+    @Override
+    public void setContrast(int contrast) {
+        softSet("contrast", contrast);
+    }
+
+    @Override
     public VideoMode getCurrentVideoMode() {
         return camera
                 .getVideoMode(); // This returns the current video mode even if the camera is disconnected
