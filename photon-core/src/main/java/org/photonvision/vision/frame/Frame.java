@@ -19,11 +19,15 @@ package org.photonvision.vision.frame;
 
 import java.util.List;
 import org.opencv.core.Rect2d;
+import org.photonvision.common.logging.LogGroup;
+import org.photonvision.common.logging.Logger;
 import org.photonvision.common.util.math.MathUtils;
 import org.photonvision.vision.opencv.CVMat;
 import org.photonvision.vision.opencv.Releasable;
 
 public class Frame implements Releasable {
+    private static final Logger logger = new Logger(Frame.class, LogGroup.General);
+
     public final long sequenceID;
     public final long timestampNanos;
 
@@ -50,6 +54,15 @@ public class Frame implements Releasable {
         this.type = type;
         this.timestampNanos = timestampNanos;
         this.frameStaticProperties = frameStaticProperties;
+
+        logger.trace(
+                () ->
+                        "Allocated Frame "
+                                + sequenceID
+                                + "; color image "
+                                + colorImage.matId
+                                + "; processed "
+                                + processedImage.matId);
     }
 
     public Frame(
@@ -78,6 +91,15 @@ public class Frame implements Releasable {
 
     @Override
     public void release() {
+        logger.trace(
+                () ->
+                        "Releasing Frame "
+                                + sequenceID
+                                + "; color image "
+                                + colorImage.matId
+                                + "; processed "
+                                + processedImage.matId);
+
         colorImage.release();
         processedImage.release();
     }

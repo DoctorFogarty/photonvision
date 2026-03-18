@@ -30,11 +30,67 @@ const offlineUpdate = ref();
 const openOfflineUpdatePrompt = () => {
   offlineUpdate.value.click();
 };
-const handleOfflineUpdate = async () => {
+
+const offlineUpdateRegex = new RegExp("photonvision-((?:dev-)?v[\\w.-]+)-((?:linux|win|mac)\\w+)\\.jar");
+const majorVersionRegex = new RegExp("(?:dev-)?(\\d+)\\.\\d+\\.\\d+");
+
+const offlineUpdateDialog = ref({ show: false, confirmString: "" });
+
+const handleOfflineUpdateRequest = async () => {
   const files = offlineUpdate.value.files;
   if (files.length === 0) return;
+
+  const match = files[0].name.match(offlineUpdateRegex);
+  if (!match) {
+    useStateStore().showSnackbarMessage({
+      message: "Selected file does not match expected naming convention.",
+      color: "error"
+    });
+    return;
+  }
+
+  const version = match[1] as string;
+  const arch = match[2] as string;
+
+  const currentVersion = useSettingsStore().general.imageVersion;
+  const currentArch = useSettingsStore().general.wpilibArch;
+
+  const versionMajor = version.match(majorVersionRegex)?.[1];
+  const currentVersionMajor = currentVersion?.match(majorVersionRegex)?.[1];
+
+  const versionMatch = currentVersion ? versionMajor === currentVersionMajor : false;
+  const dev = version.includes("dev");
+
+  if (currentArch && arch !== currentArch) {
+    useStateStore().showSnackbarMessage({
+      message: `Selected file architecture (${arch}) does not match device architecture (${currentArch}).`,
+      color: "error"
+    });
+    return;
+  } else if (versionMatch && !dev) {
+    handleOfflineUpdate(files[0]);
+  } else if (!versionMatch && !dev) {
+    offlineUpdateDialog.value = {
+      show: true,
+      confirmString: `You are attempting to update from PhotonVision ${currentVersion} on image ${useSettingsStore().general.imageVersion} to ${version} from a different FRC year. These versions may be incompatible. Are you sure you want to proceed?`
+    };
+  } else if (versionMatch && dev) {
+    offlineUpdateDialog.value = {
+      show: true,
+      confirmString:
+        "You are attempting to update to a dev version. This could result in instability. Are you sure you want to proceed?"
+    };
+  } else if (!versionMatch && dev) {
+    offlineUpdateDialog.value = {
+      show: true,
+      confirmString: `You are attempting to update to a dev version, from PhotonVision ${currentVersion} on image ${useSettingsStore().general.imageVersion} to ${version} from a different FRC year. These versions may be incompatible, and you may experience instability. Are you sure you want to proceed?`
+    };
+  }
+};
+
+const handleOfflineUpdate = async (file: File) => {
   const formData = new FormData();
-  formData.append("jarData", files[0]);
+  formData.append("jarData", file);
   useStateStore().showSnackbarMessage({
     message: "New Software Upload in Progress...",
     color: "secondary",
@@ -134,6 +190,7 @@ interface MetricItem {
 const generalMetrics = computed<MetricItem[]>(() => {
   const stats = [
     { header: "Version", value: useSettingsStore().general.version || "Unknown" },
+    { header: "Image Version", value: useSettingsStore().general.imageVersion || "Unknown" },
     { header: "Hardware Model", value: useSettingsStore().general.hardwareModel || "Unknown" },
     { header: "Platform", value: useSettingsStore().general.hardwarePlatform || "Unknown" },
     { header: "GPU Acceleration", value: useSettingsStore().general.gpuAcceleration || "None detected" }
@@ -333,7 +390,7 @@ watch(metricsHistorySnapshot, () => {
                 type="file"
                 accept=".jar"
                 style="display: none"
-                @change="handleOfflineUpdate"
+                @change="handleOfflineUpdateRequest"
               />
             </v-col>
           </v-row>
@@ -376,21 +433,33 @@ watch(metricsHistorySnapshot, () => {
             <span>CPU Usage</span>
             <span>{{ Math.round(cpuUsageData.at(-1)?.value ?? 0) }}%</span>
           </div>
-          <MetricsChart id="chart" :data="cpuUsageData" type="percentage" :min="0" :max="100" color="blue" />
+          <Suspense>
+            <!-- Allows us to import echarts when it's actually needed  -->
+            <MetricsChart id="chart" :data="cpuUsageData" type="percentage" :min="0" :max="100" color="blue" />
+            <template #fallback> Loading... </template>
+          </Suspense>
         </v-card-text>
         <v-card-text class="pt-0 flex-0-0 pb-2">
           <div class="d-flex justify-space-between pb-3 pt-3">
             <span>CPU Memory Usage</span>
             <span>{{ Math.round(cpuMemoryUsageData.at(-1)?.value ?? 0) }}%</span>
           </div>
-          <MetricsChart id="chart" :data="cpuMemoryUsageData" type="percentage" :min="0" :max="100" color="purple" />
+          <Suspense>
+            <!-- Allows us to import echarts when it's actually needed  -->
+            <MetricsChart id="chart" :data="cpuMemoryUsageData" type="percentage" :min="0" :max="100" color="purple" />
+            <template #fallback> Loading... </template>
+          </Suspense>
         </v-card-text>
         <v-card-text class="pt-0 flex-0-0 pb-2">
           <div class="d-flex justify-space-between pb-3 pt-3">
             <span>CPU Temperature</span>
             <span>{{ cpuTempData.at(-1)?.value == -1 ? "--- " : Math.round(cpuTempData.at(-1)?.value ?? 0) }}°C</span>
           </div>
-          <MetricsChart id="chart" :data="cpuTempData" type="temperature" color="red" />
+          <Suspense>
+            <!-- Allows us to import echarts when it's actually needed  -->
+            <MetricsChart id="chart" :data="cpuTempData" type="temperature" color="red" />
+            <template #fallback> Loading... </template>
+          </Suspense>
         </v-card-text>
         <v-card-text class="pt-0 flex-0-0">
           <div class="d-flex justify-space-between pb-3 pt-3">
@@ -404,7 +473,11 @@ watch(metricsHistorySnapshot, () => {
               >{{ networkUsageData.at(-1)?.value == -1 ? "---" : networkUsageData.at(-1)?.value.toFixed(3) }} Mb/s</span
             >
           </div>
-          <MetricsChart id="chart" :data="networkUsageData" type="mb" :min="0" :max="10" color="green" />
+          <Suspense>
+            <!-- Allows us to import echarts when it's actually needed  -->
+            <MetricsChart id="chart" :data="networkUsageData" type="mb" :min="0" :max="10" color="green" />
+            <template #fallback> Loading... </template>
+          </Suspense>
         </v-card-text>
       </v-card>
     </v-col>
@@ -463,6 +536,33 @@ watch(metricsHistorySnapshot, () => {
             <span class="open-label">Import Settings</span>
           </v-btn>
         </div>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
+
+  <v-dialog v-model="offlineUpdateDialog.show" :width="700" dark>
+    <v-card color="surface" flat>
+      <v-card-title style="display: flex; justify-content: center"> Offline Update </v-card-title>
+      <v-card-text class="pt-0 pb-10px">
+        <span> {{ offlineUpdateDialog.confirmString }} </span>
+      </v-card-text>
+      <v-card-text class="pt-10px">
+        <v-row class="align-center text-white">
+          <v-col cols="12">
+            <v-btn
+              color="buttonActive"
+              width="100%"
+              :variant="theme.global.name.value === 'LightTheme' ? 'elevated' : 'outlined'"
+              @click="
+                offlineUpdateDialog.show = false;
+                handleOfflineUpdate(offlineUpdate.files[0]);
+              "
+            >
+              <v-icon start class="open-icon" size="large"> mdi-upload </v-icon>
+              <span class="open-label"> Confirm Update </span>
+            </v-btn>
+          </v-col>
+        </v-row>
       </v-card-text>
     </v-card>
   </v-dialog>
