@@ -92,7 +92,8 @@ public class QuirkyCamera {
                     new QuirkyCamera(
                             0x1BCF,
                             0x28C5,
-                            CameraQuirk.NewCam));
+                            CameraQuirk.NewCam,
+                            CameraQuirk.Gain));
 
     public static final QuirkyCamera DefaultCamera = new QuirkyCamera(0, 0, "");
     public static final QuirkyCamera ZeroCopyPiCamera =
