@@ -30,7 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
-import org.opencv.core.Rect2d;
+import org.opencv.core.RotatedRect;
 import org.photonvision.common.configuration.ConfigManager;
 import org.photonvision.common.configuration.NeuralNetworkModelManager;
 import org.photonvision.common.hardware.Platform;
@@ -363,11 +363,11 @@ public class AprilTagPipeline extends CVPipeline<CVPipelineResult, AprilTagPipel
     /** Result container for ML hybrid detection */
     private static class MLDetectionResult {
         final List<AprilTagDetection> detections;
-        final List<Rect2d> rois;
+        final List<RotatedRect> rois;
         final long nanosElapsed;
 
         MLDetectionResult(
-                List<AprilTagDetection> detections, List<Rect2d> rois, long nanosElapsed) {
+                List<AprilTagDetection> detections, List<RotatedRect> rois, long nanosElapsed) {
             this.detections = detections;
             this.rois = rois;
             this.nanosElapsed = nanosElapsed;
@@ -382,9 +382,9 @@ public class AprilTagPipeline extends CVPipeline<CVPipelineResult, AprilTagPipel
         long totalNanos = 0;
 
         // Stage 1: ML detection to find ROIs
-        CVPipeResult<List<Rect2d>> mlResult = mlDetectionPipe.run(frame.colorImage);
+        CVPipeResult<List<RotatedRect>> mlResult = mlDetectionPipe.run(frame.colorImage);
         totalNanos += mlResult.nanosElapsed;
-        List<Rect2d> rawRois = mlResult.output;
+        List<RotatedRect> rawRois = mlResult.output;
 
         if (rawRois.isEmpty()) {
             return new MLDetectionResult(new ArrayList<>(), List.of(), totalNanos);
@@ -393,8 +393,8 @@ public class AprilTagPipeline extends CVPipeline<CVPipelineResult, AprilTagPipel
         // Expand ROIs before passing to decode pipe and visualization
         int frameWidth = frame.colorImage.getMat().cols();
         int frameHeight = frame.colorImage.getMat().rows();
-        List<Rect2d> expandedRois = new ArrayList<>(rawRois.size());
-        for (Rect2d roi : rawRois) {
+        List<RotatedRect> expandedRois = new ArrayList<>(rawRois.size());
+        for (RotatedRect roi : rawRois) {
             expandedRois.add(
                     AprilTagROIDecodePipe.expandBbox(
                             roi, settings.mlRoiPaddingPixels, frameWidth, frameHeight));

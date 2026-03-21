@@ -371,7 +371,7 @@ public class NeuralNetworkModelManager {
                 ConfigManager.getInstance().getConfig().neuralNetworkPropertyManager().getModel(path);
 
         if (properties == null) {
-            logger.error(
+            logger.warn(
                     "Model properties are null. This could mean the config for model "
                             + path
                             + " was unable to be found in the database. Trying legacy...");
@@ -386,6 +386,7 @@ public class NeuralNetworkModelManager {
                         .addModelProperties(properties);
             } catch (IllegalArgumentException | IOException e) {
                 logger.error("Failed to translate legacy model filename to properties: " + path, e);
+                return;
             }
         }
 
