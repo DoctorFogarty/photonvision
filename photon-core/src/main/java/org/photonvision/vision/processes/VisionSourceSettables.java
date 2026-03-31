@@ -76,6 +76,11 @@ public abstract class VisionSourceSettables {
 
     public void setBlueGain(int blue) {}
 
+    // No-op by default; overridden by cameras with gamma/contrast V4L2 controls
+    public void setGamma(int gamma) {}
+
+    public void setContrast(int contrast) {}
+
     public abstract VideoMode getCurrentVideoMode();
 
     public void setVideoModeInternal(int index) {

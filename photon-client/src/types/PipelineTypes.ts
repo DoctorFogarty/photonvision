@@ -73,6 +73,8 @@ export interface PipelineSettings {
   cameraMaxExposureRaw: number;
   offsetSinglePoint: { x: number; y: number };
   cameraBrightness: number;
+  cameraGamma: number;
+  cameraContrast: number;
   offsetDualPointAArea: number;
   cornerDetectionExactSideCount: boolean;
   cameraVideoModeIndex: number;
@@ -141,6 +143,8 @@ export const DefaultPipelineSettings: Omit<
   contourSortMode: 0,
   offsetSinglePoint: { x: 0, y: 0 },
   cameraBrightness: 50,
+  cameraGamma: 150,
+  cameraContrast: 32,
   offsetDualPointAArea: 0,
   cornerDetectionExactSideCount: false,
   cameraVideoModeIndex: 0,

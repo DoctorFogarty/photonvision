@@ -105,6 +105,28 @@ const interactiveCols = computed(() =>
       "
     />
     <pv-slider
+      v-model="useCameraSettingsStore().currentPipelineSettings.cameraGamma"
+      label="Gamma"
+      tooltip="Controls gamma correction curve — higher values brighten dark areas"
+      :min="100"
+      :max="300"
+      :slider-cols="interactiveCols"
+      @update:modelValue="
+        (args) => useCameraSettingsStore().changeCurrentPipelineSetting({ cameraGamma: args }, false)
+      "
+    />
+    <pv-slider
+      v-model="useCameraSettingsStore().currentPipelineSettings.cameraContrast"
+      label="Contrast"
+      tooltip="Controls image contrast — amplifies differences between light and dark"
+      :min="0"
+      :max="100"
+      :slider-cols="interactiveCols"
+      @update:modelValue="
+        (args) => useCameraSettingsStore().changeCurrentPipelineSetting({ cameraContrast: args }, false)
+      "
+    />
+    <pv-slider
       v-if="useCameraSettingsStore().currentPipelineSettings.cameraGain >= 0"
       v-model="useCameraSettingsStore().currentPipelineSettings.cameraGain"
       label="Camera Gain"
