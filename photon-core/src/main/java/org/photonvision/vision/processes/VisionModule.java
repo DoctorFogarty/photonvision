@@ -490,13 +490,13 @@ public class VisionModule {
                             pipelineSettings.cameraExposureRaw = 10; // reasonable default
                     }
 
+                    settables.setExposureRaw(pipelineSettings.cameraExposureRaw);
                     try {
                         settables.setAutoExposure(pipelineSettings.cameraAutoExposure);
                     } catch (VideoException e) {
                         logger.error("Unable to set camera auto exposure!");
                         logger.error(e.toString());
                     }
-                    settables.setExposureRaw(pipelineSettings.cameraExposureRaw);
                     if (cameraQuirks.hasQuirk(CameraQuirk.Gain)) {
                         settables.setGain(Math.max(0, pipelineSettings.cameraGain));
                     }
