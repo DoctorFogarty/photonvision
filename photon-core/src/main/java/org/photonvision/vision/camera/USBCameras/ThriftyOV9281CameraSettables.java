@@ -22,6 +22,11 @@ import org.wpilib.util.PixelFormat;
 import org.wpilib.vision.camera.UsbCamera;
 
 public class ThriftyOV9281CameraSettables extends GenericUSBCameraSettables {
+    // V4L2 exposure_absolute units (100 μs each). Range 1-2400 is 0.1 ms-240 ms.
+    private static final double MIN_EXPOSURE_RAW = 1;
+    private static final double MAX_EXPOSURE_RAW = 2400;
+    // 80 = 8 ms; 
+    public static final double DEFAULT_EXPOSURE_RAW = 80;
 
     public ThriftyOV9281CameraSettables(CameraConfiguration configuration, UsbCamera camera) {
         super(configuration, camera);
@@ -31,12 +36,8 @@ public class ThriftyOV9281CameraSettables extends GenericUSBCameraSettables {
     protected void setUpExposureProperties() {
         super.setUpExposureProperties();
 
-        // Fix the exposure lower and upper limits.
-        // The minimum usable exposure is above the UI default of 20, so
-        // the user is expected to increase exposure until the camera can
-        // pick up an image correctly.
-        this.minExposure = 1;
-        this.maxExposure = 2400;
+        this.minExposure = MIN_EXPOSURE_RAW;
+        this.maxExposure = MAX_EXPOSURE_RAW;
     }
 
     @Override
